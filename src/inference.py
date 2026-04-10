@@ -1,7 +1,6 @@
 import numpy as np
 from src.preprocessing import extract_all_frames
 
-# 🔥 Merge continuous segments
 def merge_segments(results, threshold=0.5):
 
     merged = []
@@ -26,13 +25,12 @@ def merge_segments(results, threshold=0.5):
     return merged
 
 
-# 🔥 Main prediction with timestamps
 def predict_with_timestamps(model, video_path, sequence_length=16):
 
     frames = extract_all_frames(video_path)
 
     if len(frames) == 0:
-        return None
+        return None, None
 
     results = []
 
@@ -49,7 +47,6 @@ def predict_with_timestamps(model, video_path, sequence_length=16):
             "violence_prob": float(prediction[1])
         })
 
-    # 🔥 Merge repetitive segments
     merged = merge_segments(results)
 
-    return merged
+    return results, merged

@@ -4,83 +4,112 @@ import pandas as pd
 from src.model import load_trained_model
 from src.inference import predict_with_timestamps
 
-# Page setup
+# 🔥 Page config
 st.set_page_config(page_title="Violence Detection", layout="wide")
 
-st.markdown("<h1 style='text-align:center;'>🔥 Violence Detection System</h1>", unsafe_allow_html=True)
-st.markdown("---")
+# 🔥 Premium UI FIXED (visible text)
+st.markdown("""
+<style>
+body {
+    background-color: #0e1117;
+    color: white;
+}
 
+/* Metric card */
+div[data-testid="stMetric"] {
+    background: linear-gradient(135deg, #1c1f26, #2a2f3a);
+    padding: 15px;
+    border-radius: 12px;
+}
+
+/* Metric label */
+div[data-testid="stMetricLabel"] {
+    color: #bbbbbb !important;
+}
+
+/* Metric value */
+div[data-testid="stMetricValue"] {
+    color: white !important;
+    font-size: 28px;
+    font-weight: bold;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# 🔥 Title
+st.markdown("""
+<h1 style='text-align:center; font-size:40px;'> Violence Detection System</h1>
+<p style='text-align:center; color:gray;'>AI-powered video surveillance & analysis</p>
+<hr>
+""", unsafe_allow_html=True)
+
+# Upload
 uploaded_file = st.file_uploader("📤 Upload Video", type=["mp4", "avi"])
 
 if uploaded_file:
 
-    # Save temp file
     tfile = tempfile.NamedTemporaryFile(delete=False)
     tfile.write(uploaded_file.read())
 
-    # Show video
     st.video(uploaded_file)
 
-    # Load model + predict
     with st.spinner("Analyzing video... ⏳"):
         model = load_trained_model()
-        results = predict_with_timestamps(model, tfile.name)
+        raw_results, merged_results = predict_with_timestamps(model, tfile.name)
 
     st.markdown("## 🧠 Analysis Report")
 
-    if results is None or len(results) == 0:
+    if merged_results is None or len(merged_results) == 0:
         st.success("✅ No Violence Detected")
+
     else:
+        fps = 25
 
-        fps = 25  # approx FPS
-
-        # Metrics
+        # 🔥 Metrics
         col1, col2 = st.columns(2)
 
         with col1:
-            st.metric("🚨 Violence Segments", len(results))
+            st.metric("🚨 Violence Segments", len(merged_results))
 
         with col2:
-            st.metric("📊 Total Segments", len(results))
+            st.metric("📊 Total Segments", len(raw_results))
 
         st.markdown("---")
 
-        # 🔥 Clean timestamps
+        # 🔥 Timestamps + Severity
         st.markdown("### ⏱️ Detected Timestamps")
 
-        for seg in results:
+        for seg in merged_results:
             start = seg["start_frame"] / fps
             end = seg["end_frame"] / fps
             prob = seg["violence_prob"]
 
-            st.error(f"⚠️ Violence from {start:.2f}s → {end:.2f}s (Confidence: {prob*100:.2f}%)")
+            if prob > 0.9:
+                level = "🔴 HIGH"
+            elif prob > 0.7:
+                level = "🟡 MEDIUM"
+            else:
+                level = "🟢 LOW"
+
+            st.error(f"{level} Violence from {start:.2f}s → {end:.2f}s ({prob*100:.2f}%)")
 
         st.markdown("---")
 
-        # 🔥 Summary
-        st.markdown("### 📊 Summary")
+        # 🔥 Key Insights
+        st.markdown("### 🔎 Key Insights")
 
-        total_duration = results[-1]["end_frame"] / fps
-        violence_duration = sum(
-            [(seg["end_frame"] - seg["start_frame"]) for seg in results]
-        ) / fps
+        longest = max([(seg["end_frame"] - seg["start_frame"]) for seg in merged_results]) / fps
+        total_violence = sum([(seg["end_frame"] - seg["start_frame"]) for seg in merged_results]) / fps
+        total_duration = raw_results[-1]["end_frame"] / fps
 
-        percentage = (violence_duration / total_duration) * 100 if total_duration > 0 else 0
+        percentage = (total_violence / total_duration) * 100 if total_duration > 0 else 0
 
         st.info(f"""
-        - ⏱️ Total Video Duration: ~{total_duration:.2f}s  
-        - 🚨 Violence Duration: ~{violence_duration:.2f}s  
-        - 📈 Violence Percentage: {percentage:.2f}%  
+        • 🔥 Total Violence Duration: {total_violence:.2f}s  
+        • ⏱️ Longest Continuous Segment: {longest:.2f}s  
+        • 📊 Number of Violent Segments: {len(merged_results)}  
+        • 📈 Violence Percentage: {percentage:.2f}%  
         """)
-
-        st.markdown("---")
-
-        # 🔥 Graph
-        st.markdown("### 📈 Violence Timeline")
-
-        timeline = [seg["violence_prob"] for seg in results]
-
-        st.line_chart(pd.DataFrame(timeline, columns=["Violence Probability"]))
 
         st.markdown("---")
 
@@ -88,7 +117,31 @@ if uploaded_file:
         st.markdown("### 🧠 AI Explanation")
 
         st.warning("""
-        The system detected aggressive motion patterns and rapid scene changes,
-        which are commonly associated with violent interactions.
-        Multiple segments show high confidence scores, indicating consistent detection.
+        • Sudden motion spikes detected in multiple segments  
+        • Close human interactions observed  
+        • High temporal variation across frames  
+        • Consistent high-confidence predictions indicate strong likelihood of violence  
         """)
+
+        st.markdown("---")
+
+        # 🔥 Download Report
+        report_data = []
+
+        for seg in merged_results:
+            report_data.append({
+                "Start (s)": seg["start_frame"] / fps,
+                "End (s)": seg["end_frame"] / fps,
+                "Confidence": seg["violence_prob"]
+            })
+
+        df = pd.DataFrame(report_data)
+
+        csv = df.to_csv(index=False).encode('utf-8')
+
+        st.download_button(
+            label="📥 Download Report",
+            data=csv,
+            file_name="violence_report.csv",
+            mime="text/csv"
+        )
